@@ -196,107 +196,146 @@ const RecordsView = ({ user }) => {
     );
 };
 
-const RecordModal = ({ onClose }) => (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                <h3 className="text-lg font-bold text-gray-800">เพิ่มบันทึกการพัฒนาตนเอง</h3>
-                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-                    <XCircle size={24} />
-                </button>
-            </div>
+const RecordModal = ({ onClose, fetchAPI }) => {
+    const [formData, setFormData] = useState({
+        title: '', activityType: '', format: 'onsite', startDate: '', endDate: '',
+        organizer: '', hours: '', expectedGoal: '', reflection: ''
+    });
+    const [isSaving, setIsSaving] = useState(false);
 
-            <div className="p-6 overflow-auto flex-1 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1 md:col-span-2">
-                        <label className="text-sm font-medium text-gray-700">ชื่อกิจกรรม / หลักสูตร <span className="text-red-500">*</span></label>
-                        <input type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น อบรมการสอนแบบ Active Learning" />
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSave = async (status) => {
+        if (!formData.title || !formData.activityType || !formData.startDate || !formData.hours) {
+            alert('กรุณากรอกข้อมูลที่มีเครื่องหมาย * ให้ครบถ้วน');
+            return;
+        }
+
+        setIsSaving(true);
+        const payload = {
+            record: { ...formData, status }
+        };
+
+        try {
+            const res = await fetchAPI('upsertRecord', payload);
+            if (res.ok) {
+                alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+                onClose();
+            } else {
+                alert('เกิดข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
+            }
+        } catch (error) {
+            alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+                <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
+                    <h3 className="text-lg font-bold text-gray-800">เพิ่มบันทึกการพัฒนาตนเอง</h3>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                        <XCircle size={24} />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-auto flex-1 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium text-gray-700">ชื่อกิจกรรม / หลักสูตร <span className="text-red-500">*</span></label>
+                            <input type="text" name="title" value={formData.title} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="เช่น อบรมการสอนแบบ Active Learning" />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">ประเภทกิจกรรม <span className="text-red-500">*</span></label>
+                            <select name="activityType" value={formData.activityType} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="">เลือกประเภท...</option>
+                                <option value="อบรม">อบรม</option>
+                                <option value="สัมมนา">สัมมนา</option>
+                                <option value="PLC">PLC</option>
+                                <option value="ศึกษาดูงาน">ศึกษาดูงาน</option>
+                                <option value="เรียนออนไลน์">เรียนออนไลน์</option>
+                                <option value="วิจัย">วิจัย</option>
+                                <option value="อื่น ๆ">อื่น ๆ</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">รูปแบบกิจกรรม <span className="text-red-500">*</span></label>
+                            <select name="format" value={formData.format} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
+                                <option value="onsite">Onsite</option>
+                                <option value="online">Online</option>
+                                <option value="hybrid">Hybrid</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">วันที่เริ่มต้น <span className="text-red-500">*</span></label>
+                            <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุด <span className="text-red-500">*</span></label>
+                            <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+
+                        <div className="space-y-1 md:col-span-2">
+                            <label className="text-sm font-medium text-gray-700">หน่วยงานผู้จัด <span className="text-red-500">*</span></label>
+                            <input type="text" name="organizer" value={formData.organizer} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">จำนวนชั่วโมงพัฒนา (ชั่วโมง) <span className="text-red-500">*</span></label>
+                            <input type="number" name="hours" value={formData.hours} onChange={handleChange} min="0" step="0.5" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                        </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">ประเภทกิจกรรม <span className="text-red-500">*</span></label>
-                        <select className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                            <option value="">เลือกประเภท...</option>
-                            <option value="อบรม">อบรม</option>
-                            <option value="สัมมนา">สัมมนา</option>
-                            <option value="PLC">PLC</option>
-                            <option value="ศึกษาดูงาน">ศึกษาดูงาน</option>
-                            <option value="เรียนออนไลน์">เรียนออนไลน์</option>
-                            <option value="วิจัย">วิจัย</option>
-                            <option value="อื่น ๆ">อื่น ๆ</option>
-                        </select>
+                    <div className="space-y-4 pt-4 border-t">
+                        <h4 className="font-semibold text-gray-800">การนำไปใช้ประโยชน์</h4>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">เป้าหมายที่คาดหวัง</label>
+                            <textarea name="expectedGoal" value={formData.expectedGoal} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows="2"></textarea>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">สิ่งที่ได้เรียนรู้ (Reflection)</label>
+                            <textarea name="reflection" value={formData.reflection} onChange={handleChange} className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows="3"></textarea>
+                        </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">รูปแบบกิจกรรม <span className="text-red-500">*</span></label>
-                        <select className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white">
-                            <option value="onsite">Onsite</option>
-                            <option value="online">Online</option>
-                            <option value="hybrid">Hybrid</option>
-                        </select>
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">วันที่เริ่มต้น <span className="text-red-500">*</span></label>
-                        <input type="date" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">วันที่สิ้นสุด <span className="text-red-500">*</span></label>
-                        <input type="date" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-
-                    <div className="space-y-1 md:col-span-2">
-                        <label className="text-sm font-medium text-gray-700">หน่วยงานผู้จัด <span className="text-red-500">*</span></label>
-                        <input type="text" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
-                    </div>
-
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">จำนวนชั่วโมงพัฒนา (ชั่วโมง) <span className="text-red-500">*</span></label>
-                        <input type="number" min="0" step="0.5" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                    <div className="space-y-4 pt-4 border-t">
+                        <h4 className="font-semibold text-gray-800">หลักฐานแนบ</h4>
+                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer">
+                            <Upload className="mx-auto text-gray-400 mb-2" size={24} />
+                            <p className="text-sm text-gray-600 mb-1">คลิกเพื่ออัปโหลด หรือลากไฟล์มาวางที่นี่</p>
+                            <p className="text-xs text-gray-400">รองรับ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
+                        </div>
+                        <p className="text-center text-sm font-medium text-gray-500">หรือ</p>
+                        <div className="space-y-1">
+                            <label className="text-sm font-medium text-gray-700">แนบลิงก์หลักฐาน (Google Drive/เว็บไซต์)</label>
+                            <input type="url" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://" />
+                        </div>
                     </div>
                 </div>
 
-                <div className="space-y-4 pt-4 border-t">
-                    <h4 className="font-semibold text-gray-800">การนำไปใช้ประโยชน์</h4>
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">เป้าหมายที่คาดหวัง</label>
-                        <textarea className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows="2"></textarea>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">สิ่งที่ได้เรียนรู้ (Reflection)</label>
-                        <textarea className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" rows="3"></textarea>
-                    </div>
+                <div className="px-6 py-4 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-3">
+                    <button onClick={onClose} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors border bg-white disabled:opacity-50">
+                        ยกเลิก
+                    </button>
+                    <button onClick={() => handleSave('draft')} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors disabled:opacity-50">
+                        {isSaving ? 'กำลังบันทึก...' : 'บันทึกร่าง'}
+                    </button>
+                    <button onClick={() => handleSave('submitted')} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg transition-colors disabled:opacity-50">
+                        {isSaving ? 'กำลังบันทึก...' : 'บันทึกและส่งตรวจ'}
+                    </button>
                 </div>
-
-                <div className="space-y-4 pt-4 border-t">
-                    <h4 className="font-semibold text-gray-800">หลักฐานแนบ</h4>
-                    <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer">
-                        <Upload className="mx-auto text-gray-400 mb-2" size={24} />
-                        <p className="text-sm text-gray-600 mb-1">คลิกเพื่ออัปโหลด หรือลากไฟล์มาวางที่นี่</p>
-                        <p className="text-xs text-gray-400">รองรับ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
-                    </div>
-                    <p className="text-center text-sm font-medium text-gray-500">หรือ</p>
-                    <div className="space-y-1">
-                        <label className="text-sm font-medium text-gray-700">แนบลิงก์หลักฐาน (Google Drive/เว็บไซต์)</label>
-                        <input type="url" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://" />
-                    </div>
-                </div>
-            </div>
-
-            <div className="px-6 py-4 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-3">
-                <button onClick={onClose} className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors border bg-white">
-                    ยกเลิก
-                </button>
-                <button className="px-5 py-2.5 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors">
-                    บันทึกร่าง
-                </button>
-                <button className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg transition-colors">
-                    บันทึกและส่งตรวจ
-                </button>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // Admins Views Placeholders
 const ReviewView = () => <div className="p-6 text-center text-gray-500 bg-white rounded-xl border shadow-sm">ฟังก์ชันสำหรับรอตรวจ (Admin Only)</div>;
