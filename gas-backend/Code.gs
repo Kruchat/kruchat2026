@@ -74,7 +74,21 @@ function handleRequest(e, method) {
     const action = payload.action || (e.parameter && e.parameter.action);
     let responseData = null;
     
-    // For local development, allow email to be passed in payload if Session is empty
+    // Public endpoints that do NOT require authentication
+    const publicActions = ['registerUser', 'loginUser'];
+    if (publicActions.includes(action)) {
+      switch(action) {
+        case 'registerUser':
+          responseData = registerUser(payload.user);
+          break;
+        case 'loginUser':
+          responseData = loginUser(payload.email, payload.password);
+          break;
+      }
+      return buildResponse({ ok: true, data: responseData });
+    }
+    
+    // For authenticated endpoints, get user email from Session or payload
     let currentUserEmail = Session.getActiveUser().getEmail();
     if (!currentUserEmail && payload.email) {
        currentUserEmail = payload.email;
@@ -134,12 +148,6 @@ function handleRequest(e, method) {
         break;
       case 'uploadFile':
         responseData = uploadFile(payload, currentUserEmail);
-        break;
-      case 'registerUser':
-        responseData = registerUser(payload.user);
-        break;
-      case 'loginUser':
-        responseData = loginUser(payload.email, payload.password);
         break;
       default:
         throw new Error("Invalid action or missing action parameter: " + action);
