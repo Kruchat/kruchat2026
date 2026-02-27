@@ -76,20 +76,37 @@ export default function App() {
         }
     }, [localEmail]);
 
-    const handleLoginClick = async (emailInput) => {
-        // Send emailInput to backend if available (useful for local dev testing)
-        const res = await fetchAPI('getMe', { email: emailInput });
+    const handleLoginClick = async () => {
+        const res = await fetchAPI('getMe');
         if (res && res.ok && res.data) {
             setCurrentUser(res.data);
-            if (emailInput) setLocalEmail(emailInput);
+            localStorage.setItem('tdl_userObj', JSON.stringify(res.data));
         } else {
-            alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'โปรดตรวจสอบสิทธิ์'));
+            // Local dev fallback logic - if login fails because "No email found", prompt for an email
+            if (res?.error?.message?.includes("No email found")) {
+                const promptEmail = window.prompt("ระบบไม่สามารถอ้างอิงบัญชี Google ของคุณได้โดยอัตโนมัติ (อาจเกิดจากข้อจำกัดของเบราว์เซอร์)\n\nกรุณาพิมพ์อีเมลของคุณ (เช่น user@school.ac.th) เพื่อจำลองการเข้าสู่ระบบ:");
+                if (promptEmail && promptEmail.includes('@')) {
+                    const localRes = await fetchAPI('getMe', { email: promptEmail });
+                    if (localRes && localRes.ok && localRes.data) {
+                        setCurrentUser(localRes.data);
+                        setLocalEmail(promptEmail);
+                        localStorage.setItem('tdl_userObj', JSON.stringify(localRes.data));
+                        localStorage.setItem('tdl_localEmail', promptEmail);
+                    } else {
+                        alert('ไม่สามารถเข้าสู่ระบบได้: ' + (localRes?.error?.message || 'โปรดตรวจสอบสิทธิ์'));
+                    }
+                }
+            } else {
+                alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'โปรดตรวจสอบสิทธิ์ หรือติดต่อผู้ดูแลระบบหากบัญชีของคุณถูกระงับ'));
+            }
         }
     };
 
     const handleLogout = () => {
         setCurrentUser(null);
         setLocalEmail('');
+        localStorage.removeItem('tdl_userObj');
+        localStorage.removeItem('tdl_localEmail');
     };
 
     if (isCheckingAutoLogin) {
