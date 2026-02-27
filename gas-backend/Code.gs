@@ -135,6 +135,12 @@ function handleRequest(e, method) {
       case 'uploadFile':
         responseData = uploadFile(payload, currentUserEmail);
         break;
+      case 'registerUser':
+        responseData = registerUser(payload.user);
+        break;
+      case 'loginUser':
+        responseData = loginUser(payload.email, payload.password);
+        break;
       default:
         throw new Error("Invalid action or missing action parameter: " + action);
     }
@@ -152,23 +158,107 @@ function buildResponse(obj) {
 }
 
 function getMeProcess(email) {
-  let user = getUser(email);
+  const user = getUser(email);
   if(!user) {
-     const sheet = getDB().getSheetByName('Users');
-     if(sheet.getLastRow() <= 1) {
-        user = { email, name: email.split('@')[0], role: 'admin', status: 'active'};
-        upsertUser(user);
-     } else {
-        user = { email, name: email.split('@')[0], role: 'teacher', status: 'active'};
-        upsertUser(user);
-     }
+    throw new Error("ไม่พบบัญชีผู้ใช้งานในระบบ กรุณาสมัครสมาชิก");
   }
   
   if (user.status !== 'active') {
-      throw new Error("บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ (Account Suspended)");
+      throw new Error("บัญชีของคุณถูกระงับการใช้งาน หรือรอการอนุมัติ กรุณาติดต่อผู้ดูแลระบบ");
   }
   
-  return user;
+  // Don't send password hash back to client
+  const safeUser = { ...user };
+  delete safeUser.password;
+  
+  return safeUser;
+}
+
+function registerUser(userData) {
+  if (!userData.email || !userData.password || !userData.name) {
+    throw new Error("กรุณากรอกข้อมูลให้ครบถ้วน");
+  }
+  
+  const existingUser = getUser(userData.email);
+  if (existingUser) {
+    throw new Error("อีเมลนี้ถูกใช้งานแล้ว กรุณาเข้าสู่ระบบ");
+  }
+  
+  const sheet = getDB().getSheetByName('Users');
+  const isFirstUser = sheet.getLastRow() <= 1;
+  
+  // Hash password very simply for GAS (For production, use a proper crypto library if available, here we use basic SHA-256)
+  const passwordHash = computeSHA256(userData.password);
+  
+  const newUser = {
+    email: userData.email,
+    name: userData.name,
+    role: isFirstUser ? 'admin' : 'teacher',
+    status: isFirstUser ? 'active' : 'pending', // Auto active if first user (admin)
+    password: passwordHash,
+    createdAt: Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss")
+  };
+  
+  const result = saveObjectToSheet('Users', newUser, 'email');
+  logAudit(newUser.email, 'REGISTER_USER', `Role: ${newUser.role}`);
+  
+  const safeUser = { ...result };
+  delete safeUser.password;
+  
+  return { 
+    user: safeUser, 
+    message: isFirstUser ? "ลงทะเบียน Admin สำเร็จ เข้าสู่ระบบได้ทันที" : "สมัครสมาชิกสำเร็จ กรุณารอผู้ดูแลระบบอนุมัติการใช้งาน" 
+  };
+}
+
+function loginUser(email, password) {
+  if (!email || !password) throw new Error("กรุณากรอกอีเมลและรหัสผ่าน");
+  
+  const user = getUser(email);
+  if (!user) {
+    throw new Error("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+  }
+  
+  const inputHash = computeSHA256(password);
+  if (user.password !== inputHash) {
+     // Legacy support: if user has no password (created before this update), allow them to set it now by treating their first login as setting the password
+     if (!user.password) {
+        user.password = inputHash;
+        saveObjectToSheet('Users', user, 'email');
+     } else {
+        throw new Error("อีเมลหรือรหัสผ่านไม่ถูกต้อง");
+     }
+  }
+  
+  if (user.status === 'pending') {
+    throw new Error("บัญชีของคุณกำลังรอการอนุมัติจากผู้ดูแลระบบ");
+  }
+  
+  if (user.status !== 'active') {
+    throw new Error("บัญชีของคุณถูกระงับการใช้งาน");
+  }
+  
+  logAudit(email, 'LOGIN', 'Success');
+  
+  const safeUser = { ...user };
+  delete safeUser.password;
+  return safeUser;
+}
+
+function computeSHA256(input) {
+  const rawHash = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, input, Utilities.Charset.UTF_8);
+  let txtHash = '';
+  for (let i = 0; i < rawHash.length; i++) {
+    let hashVal = rawHash[i];
+    if (hashVal < 0) {
+      hashVal += 256;
+    }
+    if (hashVal.toString(16).length == 1) {
+      txtHash += '0';
+    }
+    txtHash += hashVal.toString(16);
+  }
+  return txtHash;
 }
 
 function requireAdmin(currentUserEmail) {

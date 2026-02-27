@@ -76,28 +76,36 @@ export default function App() {
         }
     }, [localEmail]);
 
-    const handleLoginClick = async () => {
-        const res = await fetchAPI('getMe');
-        if (res && res.ok && res.data) {
-            setCurrentUser(res.data);
-            localStorage.setItem('tdl_userObj', JSON.stringify(res.data));
-        } else {
-            // Local dev fallback logic - if login fails because "No email found", prompt for an email
-            if (res?.error?.message?.includes("No email found")) {
-                const promptEmail = window.prompt("ระบบไม่สามารถอ้างอิงบัญชี Google ของคุณได้โดยอัตโนมัติ (อาจเกิดจากข้อจำกัดของเบราว์เซอร์)\n\nกรุณาพิมพ์อีเมลของคุณ (เช่น user@school.ac.th) เพื่อจำลองการเข้าสู่ระบบ:");
-                if (promptEmail && promptEmail.includes('@')) {
-                    const localRes = await fetchAPI('getMe', { email: promptEmail });
-                    if (localRes && localRes.ok && localRes.data) {
-                        setCurrentUser(localRes.data);
-                        setLocalEmail(promptEmail);
-                        localStorage.setItem('tdl_userObj', JSON.stringify(localRes.data));
-                        localStorage.setItem('tdl_localEmail', promptEmail);
-                    } else {
-                        alert('ไม่สามารถเข้าสู่ระบบได้: ' + (localRes?.error?.message || 'โปรดตรวจสอบสิทธิ์'));
-                    }
-                }
+    const handleLoginClick = async (mode, formData) => {
+        if (!formData.email || !formData.password) {
+            alert('กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน');
+            return;
+        }
+
+        if (mode === 'register') {
+            if (!formData.name) {
+                alert('กรุณากรอกชื่อ-นามสกุล');
+                return;
+            }
+            const res = await fetchAPI('registerUser', { user: formData });
+            if (res && res.ok && res.data) {
+                alert(res.data.message || 'สมัครสมาชิกสำเร็จ');
+                // The LoginView will automatically switch back to 'login' mode on success
             } else {
-                alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'โปรดตรวจสอบสิทธิ์ หรือติดต่อผู้ดูแลระบบหากบัญชีของคุณถูกระงับ'));
+                alert('ไม่สามารถสมัครสมาชิกได้: ' + (res?.error?.message || 'เกิดข้อผิดพลาด'));
+                throw new Error("Register failed"); // To stop loading state in LoginView
+            }
+        }
+        else if (mode === 'login') {
+            const res = await fetchAPI('loginUser', { email: formData.email, password: formData.password });
+            if (res && res.ok && res.data) {
+                setCurrentUser(res.data);
+                setLocalEmail(formData.email);
+                localStorage.setItem('tdl_userObj', JSON.stringify(res.data));
+                localStorage.setItem('tdl_localEmail', formData.email);
+            } else {
+                alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'อีเมลหรือรหัสผ่านไม่ถูกต้อง หรือบัญชีของคุณอาจกำลังรอการอนุมัติ'));
+                throw new Error("Login failed");
             }
         }
     };
@@ -184,48 +192,188 @@ export default function App() {
 // === Components ===
 
 const LoginView = ({ onLogin, loading }) => {
+    const [mode, setMode] = useState('login'); // 'login' or 'register'
+    const [formData, setFormData] = useState({ email: '', password: '', name: '' });
+    const [showPassword, setShowPassword] = useState(false);
+    const [localLoading, setLocalLoading] = useState(false);
+
+    const handleInputChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setLocalLoading(true);
+        try {
+            if (mode === 'login') {
+                await onLogin('login', formData);
+            } else {
+                await onLogin('register', formData);
+                setMode('login'); // switch back after success
+                setFormData({ ...formData, password: '' }); // clear password
+            }
+        } catch (error) {
+            // Error handling is managed by onLogin from App
+        } finally {
+            setLocalLoading(false);
+        }
+    };
+
     return (
-        <div className="flex h-screen bg-[#F5F5F7] items-center justify-center p-4">
-            <div className="max-w-[420px] w-full bg-white rounded-[24px] apple-shadow-lg overflow-hidden border border-gray-100 flex flex-col items-center pb-8 pt-12 px-8">
-                {/* Logo Area */}
-                <div className="w-16 h-16 bg-[#007AFF] rounded-2xl flex items-center justify-center mb-6 shadow-md shadow-blue-200">
-                    <FileText className="text-white" size={32} />
+        <div className="flex min-h-screen bg-[#F5F5F7]">
+            {/* Left Panel: Branding & Graphics (Hidden on small screens) */}
+            <div className="hidden lg:flex lg:w-1/2 bg-slate-900 text-white flex-col justify-between p-12 relative overflow-hidden">
+                <div className="relative z-10">
+                    <div className="flex items-center space-x-3 mb-8">
+                        <div className="w-10 h-10 bg-blue-500 rounded-xl flex items-center justify-center">
+                            <FileText size={20} className="text-white" />
+                        </div>
+                        <span className="text-xl font-bold tracking-tight font-display">Teacher DevLog</span>
+                    </div>
+                    <h1 className="text-5xl font-bold leading-tight mb-6">
+                        ยกระดับ<br />
+                        <span className="text-blue-400">การพัฒนาตนเอง</span><br />
+                        อย่างมืออาชีพ
+                    </h1>
+                    <p className="text-slate-400 text-lg max-w-md">
+                        ระบบจัดการและติดตามผลลัพธ์การพัฒนาตนเองสำหรับบุคลากรทางการศึกษา ใช้งานง่ายและปลอดภัย
+                    </p>
                 </div>
 
-                <h2 className="text-2xl font-bold tracking-tight text-gray-900 mb-2 font-display text-center">
-                    Teacher DevLog
-                </h2>
-                <p className="text-gray-500 text-sm mb-10 text-center">
-                    ระบบบันทึกและติดตามการพัฒนาตนเอง
-                </p>
+                {/* Abstract Decorative Elements */}
+                <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[100px] mix-blend-screen pointer-events-none"></div>
+                <div className="absolute bottom-[-10%] left-[-10%] w-[600px] h-[600px] bg-indigo-600/20 rounded-full blur-[120px] mix-blend-screen pointer-events-none"></div>
 
-                <div className="w-full space-y-4">
-                    <button
-                        onClick={() => onLogin()}
-                        disabled={loading}
-                        className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center disabled:opacity-50 relative group"
-                    >
-                        {loading ? (
-                            <>
-                                <div className="w-5 h-5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2"></div>
-                                กำลังตรวจสอบ...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-5 h-5 absolute left-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24">
-                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
-                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" />
-                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-                                    <path d="M1 1h22v22H1z" fill="none" />
-                                </svg>
-                                <span>เข้าสู่ระบบด้วย Google</span>
-                            </>
+                <div className="relative z-10 flex items-center space-x-4 text-sm text-slate-500 font-medium">
+                    <span>© 2026 Kruchat System</span>
+                    <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
+                    <span>All Rights Reserved</span>
+                </div>
+            </div>
+
+            {/* Right Panel: Form */}
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-6 md:p-12 relative">
+                <div className="max-w-[420px] w-full bg-white rounded-3xl apple-shadow-lg p-8 md:p-10 border border-gray-100">
+                    {/* Mobile Logo */}
+                    <div className="lg:hidden flex justify-center mb-8">
+                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+                            <FileText size={32} className="text-white" />
+                        </div>
+                    </div>
+
+                    <div className="mb-8 text-center lg:text-left">
+                        <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2">
+                            {mode === 'login' ? 'ยินต้อนรับกลับมา' : 'สร้างบัญชีใหม่'}
+                        </h2>
+                        <p className="text-gray-500 text-sm">
+                            {mode === 'login' ? 'กรุณาเข้าสู่ระบบเพื่อจัดการข้อมูลของคุณ' : 'กรอกข้อมูลเพื่อลงทะเบียนเข้าใช้งานระบบ'}
+                        </p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        {mode === 'register' && (
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">ชื่อ - นามสกุล</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                                        <Users size={18} />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        name="name"
+                                        required
+                                        placeholder="เช่น สมชาย ใจดี"
+                                        value={formData.name}
+                                        onChange={handleInputChange}
+                                        className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                                    />
+                                </div>
+                            </div>
                         )}
-                    </button>
-                    <p className="text-[11px] text-gray-400 text-center px-4 leading-relaxed mt-4">
-                        หากท่านไม่สามารถเข้าสู่ระบบได้ กรุณาติดต่อผู้ดูแลระบบเพื่อตรวจสอบสิทธิ์การใช้งาน
-                    </p>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1.5 ml-1">อีเมลโรงเรียน</label>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type="email"
+                                    name="email"
+                                    required
+                                    placeholder="your.email@school.ac.th"
+                                    value={formData.email}
+                                    onChange={handleInputChange}
+                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                                <label className="block text-sm font-medium text-gray-700 ml-1">รหัสผ่าน</label>
+                                {mode === 'login' && (
+                                    <a href="#" className="text-xs text-blue-600 hover:text-blue-800 font-medium">ลืมรหัสผ่าน?</a>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-gray-400">
+                                    <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                </div>
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    name="password"
+                                    required
+                                    placeholder="••••••••"
+                                    value={formData.password}
+                                    onChange={handleInputChange}
+                                    className="w-full pl-11 pr-12 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none tracking-widest"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+                                >
+                                    {showPassword ? (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                                    ) : (
+                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={loading || localLoading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3.5 rounded-xl transition-all shadow-md hover:shadow-lg flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed mt-2"
+                        >
+                            {(loading || localLoading) ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
+                                    กำลังดำเนินการ...
+                                </>
+                            ) : (
+                                mode === 'login' ? "เข้าสู่ระบบ" : "สมัครสมาชิก"
+                            )}
+                        </button>
+                    </form>
+
+                    <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-center space-x-1 text-sm">
+                        <span className="text-gray-500">
+                            {mode === 'login' ? 'ยังไม่มีบัญชีผู้ใช้งาน?' : 'มีบัญชีอยู่แล้ว?'}
+                        </span>
+                        <button
+                            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setFormData({ email: '', password: '', name: '' }) }}
+                            className="text-blue-600 font-semibold hover:text-blue-800 transition-colors"
+                        >
+                            {mode === 'login' ? 'สร้างบัญชีใหม่' : 'เข้าสู่ระบบ'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -789,6 +937,7 @@ const ReviewView = ({ user, fetchAPI }) => {
 const UsersView = ({ user, fetchAPI }) => {
     const [usersList, setUsersList] = useState([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [activeUserTab, setActiveUserTab] = useState('approved'); // 'approved' or 'pending'
 
     const loadUsers = async () => {
         const res = await fetchAPI('getUsers');
@@ -800,7 +949,7 @@ const UsersView = ({ user, fetchAPI }) => {
     useEffect(() => {
         loadUsers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user]);
+    }, [user, activeUserTab]);
 
     const handleRoleChange = async (targetEmail, currentRole) => {
         if (targetEmail === user.email) {
@@ -823,7 +972,11 @@ const UsersView = ({ user, fetchAPI }) => {
             return;
         }
         const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-        if (confirm(`ยืนยันการเปลี่ยนสถานะเป็น ${newStatus} ใช่หรือไม่?`)) {
+        const confirmMsg = currentStatus === 'pending'
+            ? `ยืนยันการ อนุมัติ บัญชี ${targetEmail} เข้าสู่ระบบใช่หรือไม่?`
+            : `ยืนยันการตั้งสถานะเป็น ${newStatus.toUpperCase()} ใช่หรือไม่?`;
+
+        if (confirm(confirmMsg)) {
             setIsProcessing(true);
             const res = await fetchAPI('updateUser', { targetEmail, updates: { status: newStatus } });
             if (res.ok) await loadUsers();
@@ -846,59 +999,118 @@ const UsersView = ({ user, fetchAPI }) => {
         }
     };
 
+    const pendingUsers = usersList.filter(u => u.status === 'pending');
+    const approvedUsers = usersList.filter(u => u.status !== 'pending');
+
+    const displayUsers = activeUserTab === 'pending' ? pendingUsers : approvedUsers;
+
     return (
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">จัดการผู้ใช้ระบบ (Admin)</h2>
-            <div className="overflow-auto">
+        <div className="bg-white rounded-xl shadow-sm border flex flex-col h-full">
+            <div className="p-4 md:p-6 border-b flex flex-col space-y-4">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-bold text-gray-800">จัดการผู้ใช้งาน (Admin)</h2>
+                        <p className="text-gray-500 text-sm">อนุมัติและจัดการสิทธิ์การเข้าถึงระบบ</p>
+                    </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex space-x-2 border-b">
+                    <button
+                        onClick={() => setActiveUserTab('approved')}
+                        className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${activeUserTab === 'approved' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        ผู้ใช้งานปัจจุบัน ({approvedUsers.length})
+                    </button>
+                    <button
+                        onClick={() => setActiveUserTab('pending')}
+                        className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors flex items-center ${activeUserTab === 'pending' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                    >
+                        รอการอนุมัติ
+                        {pendingUsers.length > 0 && (
+                            <span className="ml-2 bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">{pendingUsers.length}</span>
+                        )}
+                    </button>
+                </div>
+            </div>
+
+            <div className="overflow-auto p-4 md:p-6">
                 <table className="w-full text-left border-collapse min-w-[500px]">
                     <thead className="bg-gray-50 border-b">
                         <tr>
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600">อีเมล</th>
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600">ชื่อ</th>
-                            <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">สิทธิ์</th>
+                            {activeUserTab === 'approved' && <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">สิทธิ์</th>}
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">สถานะ</th>
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y text-sm">
-                        {usersList.length === 0 ? (
-                            <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
-                        ) : usersList.map(u => (
+                        {displayUsers.length === 0 ? (
+                            <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">{activeUserTab === 'pending' ? 'ไม่มีผู้ใช้งานที่รอการอนุมัติ' : 'ไม่มีผู้ใช้งานในระบบ'}</td></tr>
+                        ) : displayUsers.map(u => (
                             <tr key={u.email} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-4 py-3">{u.email}</td>
                                 <td className="px-4 py-3">{u.name}</td>
+                                {activeUserTab === 'approved' && (
+                                    <td className="px-4 py-3 text-center">
+                                        <button
+                                            onClick={() => handleRoleChange(u.email, u.role)}
+                                            disabled={isProcessing || u.email === user.email}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border 
+                                                ${u.role === 'admin'
+                                                    ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                                    : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                                        >
+                                            {u.role.toUpperCase()}
+                                        </button>
+                                    </td>
+                                )}
                                 <td className="px-4 py-3 text-center">
-                                    <button
-                                        onClick={() => handleRoleChange(u.email, u.role)}
-                                        disabled={isProcessing || u.email === user.email}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border 
-                                            ${u.role === 'admin'
-                                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
-                                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
-                                    >
-                                        {u.role.toUpperCase()}
-                                    </button>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    <button
-                                        onClick={() => handleStatusChange(u.email, u.status)}
-                                        disabled={isProcessing || u.email === user.email}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border
-                                            ${u.status === 'active'
-                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
-                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
-                                    >
-                                        {u.status.toUpperCase()}
-                                    </button>
+                                    {activeUserTab === 'pending' ? (
+                                        <span className="px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider bg-orange-50 text-orange-700 border border-orange-200">
+                                            PENDING
+                                        </span>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleStatusChange(u.email, u.status)}
+                                            disabled={isProcessing || u.email === user.email}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border
+                                                ${u.status === 'active'
+                                                    ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                    : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                                        >
+                                            {u.status.toUpperCase()}
+                                        </button>
+                                    )}
                                 </td>
                                 <td className="px-4 py-3 text-right">
-                                    <button
-                                        onClick={() => handleDeleteUser(u.email)}
-                                        disabled={isProcessing || u.email === user.email}
-                                        className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors py-1 px-3 rounded-lg hover:bg-red-50 disabled:opacity-30 border border-transparent hover:border-red-100"
-                                    >
-                                        ลบผู้ใช้
-                                    </button>
+                                    {activeUserTab === 'pending' ? (
+                                        <div className="flex justify-end space-x-2">
+                                            <button
+                                                onClick={() => handleStatusChange(u.email, u.status)}
+                                                disabled={isProcessing}
+                                                className="text-green-700 hover:text-green-800 font-medium text-sm transition-colors py-1.5 px-3 rounded-lg bg-green-100 hover:bg-green-200 disabled:opacity-50"
+                                            >
+                                                อนุมัติ
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteUser(u.email)}
+                                                disabled={isProcessing}
+                                                className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors py-1 px-3 rounded-lg hover:bg-red-50 disabled:opacity-30 border border-transparent hover:border-red-100"
+                                            >
+                                                ปฏิเสธ
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={() => handleDeleteUser(u.email)}
+                                            disabled={isProcessing || u.email === user.email}
+                                            className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors py-1 px-3 rounded-lg hover:bg-red-50 disabled:opacity-30 border border-transparent hover:border-red-100"
+                                        >
+                                            ลบผู้ใช้
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}
