@@ -334,7 +334,7 @@ function changeRecordStatus(recordId, newStatus, email) {
 
 function reviewRecord(recordId, actionType, comment, email) {
   const record = getRecord(recordId, email);
-  record.status = actionType === 'approve' ? 'approved' : 'rejected';
+  record.status = actionType === 'approved' ? 'approved' : 'rejected';
   record.adminComment = comment || '';
   record.updatedAt = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
   saveObjectToSheet('Records', record, 'recordId');
