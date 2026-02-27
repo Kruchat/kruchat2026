@@ -1,9 +1,26 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   body {
-    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+    @apply bg-[#F5F5F7] text-gray-900 antialiased;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/50 shadow-sm shadow-black/5;
+  }
+
+  .apple-shadow {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  }
+
+  .apple-shadow-lg {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   }
 }

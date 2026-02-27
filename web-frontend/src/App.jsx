@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check } from 'lucide-react';
+import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check, Paperclip } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // === Configuration ===
 // นำ URL ที่ได้จากการ Deploy Google Apps Script มาวางที่นี่
@@ -199,6 +200,8 @@ const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
 
 const DashboardView = ({ user, fetchAPI }) => {
     const [stats, setStats] = useState({ totalHours: 0, pending: 0, approved: 0 });
+    const [chartData, setChartData] = useState([]);
+    const [pieData, setPieData] = useState([]);
 
     useEffect(() => {
         const loadStats = async () => {
@@ -206,31 +209,103 @@ const DashboardView = ({ user, fetchAPI }) => {
             if (res && res.ok) {
                 const records = res.data || [];
                 let h = 0, p = 0, a = 0;
+
+                // For charts
+                const typeCount = {};
+                const formatCount = { onsite: 0, online: 0, hybrid: 0 };
+
                 records.forEach(r => {
                     if (r.status === 'approved') {
                         a++;
                         h += Number(r.hours) || 0;
+
+                        // Count types for approved
+                        typeCount[r.activityType] = (typeCount[r.activityType] || 0) + 1;
+                        if (r.format) formatCount[r.format] = (formatCount[r.format] || 0) + 1;
                     }
                     if (r.status === 'submitted') p++;
                 });
+
                 setStats({ totalHours: h, pending: p, approved: a });
+
+                setChartData(Object.keys(typeCount).map(k => ({ name: k, count: typeCount[k] })));
+                setPieData([
+                    { name: 'Onsite', value: formatCount.onsite },
+                    { name: 'Online', value: formatCount.online },
+                    { name: 'Hybrid', value: formatCount.hybrid }
+                ].filter(d => d.value > 0));
             }
         };
         loadStats();
     }, [user, fetchAPI]);
 
+    const COLORS = ['#007AFF', '#34C759', '#FF9500', '#FF3B30', '#5856D6', '#FF2D55'];
+
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card title="ชั่วโมงสะสมปีนี้ (ผ่านแล้ว)" value={stats.totalHours} subtitle="เป้าหมาย: 20 ชั่วโมง" icon={<Clock className="text-blue-500" size={24} />} />
-                <Card title="รายการรอตรวจ" value={stats.pending} subtitle="รอการอนุมัติรับรอง" icon={<FileText className="text-yellow-500" size={24} />} />
-                <Card title="ผ่านการอนุมัติแล้ว" value={stats.approved} subtitle="รายการกิจกรรม" icon={<CheckCircle className="text-green-500" size={24} />} />
+                <Card title="ชั่วโมงสะสมปีนี้ (ผ่านแล้ว)" value={stats.totalHours} subtitle="เป้าหมาย: 20 ชั่วโมง" icon={<Clock className="text-[#007AFF]" size={28} />} />
+                <Card title="รายการรอตรวจ" value={stats.pending} subtitle="รอการอนุมัติรับรอง" icon={<FileText className="text-[#FF9500]" size={28} />} />
+                <Card title="ผ่านการอนุมัติแล้ว" value={stats.approved} subtitle="รายการกิจกรรม" icon={<CheckCircle className="text-[#34C759]" size={28} />} />
             </div>
-            <div className="bg-white rounded-xl shadow-sm border p-6">
-                <h3 className="text-lg font-medium mb-4">กิจกรรมล่าสุด</h3>
-                <div className="text-center py-10 text-gray-500">
-                    <FileCode size={48} className="mx-auto text-gray-300 mb-3" />
-                    <p>เข้าสู่เมนู "บันทึกของฉัน" เพื่อดูรายการกิจกรรมทั้งหมด</p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-white rounded-[24px] apple-shadow border border-gray-100 p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-6 font-display">จำนวนกิจกรรมที่ผ่านอนุมัติ (แยกตามประเภท)</h3>
+                    {chartData.length > 0 ? (
+                        <div className="h-[300px] w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5EA" />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#8E8E93', fontSize: 12 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8E8E93', fontSize: 12 }} />
+                                    <Tooltip cursor={{ fill: '#F2F2F7' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
+                                    <Bar dataKey="count" fill="#007AFF" radius={[6, 6, 0, 0]} barSize={40} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 text-gray-400 flex flex-col items-center">
+                            <FileCode size={48} className="mb-4 opacity-20" />
+                            <p>ไม่มีข้อมูลสถิติที่ผ่านการอนุมัติ</p>
+                        </div>
+                    )}
+                </div>
+
+                <div className="bg-white rounded-[24px] apple-shadow border border-gray-100 p-6">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-6 font-display">สัดส่วนรูปแบบการเข้าร่วม</h3>
+                    {pieData.length > 0 ? (
+                        <div className="h-[300px] w-full relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={pieData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={80}
+                                        outerRadius={110}
+                                        paddingAngle={5}
+                                        dataKey="value"
+                                        stroke="none"
+                                    >
+                                        {pieData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }} />
+                                </PieChart>
+                            </ResponsiveContainer>
+                            <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
+                                <span className="text-3xl font-bold text-gray-800">{stats.approved}</span>
+                                <span className="text-xs text-gray-500 uppercase tracking-wider">ทั้งหมด</span>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 text-gray-400 flex flex-col items-center">
+                            <FileCode size={48} className="mb-4 opacity-20" />
+                            <p>ไม่มีข้อมูลสัดส่วนรูปแบบ</p>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -238,11 +313,11 @@ const DashboardView = ({ user, fetchAPI }) => {
 };
 
 const Card = ({ title, value, subtitle, icon }) => (
-    <div className="bg-white rounded-xl shadow-sm border p-6 flex items-start space-x-4 hover:shadow-md transition-shadow">
-        <div className="p-3 bg-slate-50 rounded-lg">{icon}</div>
+    <div className="bg-white rounded-[24px] apple-shadow border border-gray-100 p-6 flex items-center space-x-5 hover:apple-shadow-lg transition-all duration-300 transform hover:-translate-y-1">
+        <div className="p-4 bg-gray-50 rounded-2xl">{icon}</div>
         <div>
             <p className="text-gray-500 text-sm font-medium">{title}</p>
-            <h4 className="text-2xl font-bold text-gray-900 my-1">{value}</h4>
+            <h4 className="text-3xl font-bold text-gray-900 my-1">{value}</h4>
             <p className="text-xs text-gray-400">{subtitle}</p>
         </div>
     </div>
@@ -315,6 +390,7 @@ const RecordsView = ({ user, fetchAPI }) => {
                             <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider">วันที่</th>
                             <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">ชั่วโมง</th>
                             <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">สถานะ</th>
+                            <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-center">ไฟล์แนบ</th>
                             <th className="px-6 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wider text-right">จัดการ</th>
                         </tr>
                     </thead>
@@ -334,6 +410,13 @@ const RecordsView = ({ user, fetchAPI }) => {
                                 </td>
                                 <td className="px-6 py-4 text-center text-gray-500">{record.hours}</td>
                                 <td className="px-6 py-4 text-center"><StatusBadge status={record.status} /></td>
+                                <td className="px-6 py-4 text-center">
+                                    {record.attachments?.length > 0 ? (
+                                        <a href={record.attachments[0].fileUrl} target="_blank" rel="noreferrer" className="text-blue-500 hover:text-blue-700 flex justify-center w-full" title="ดูไฟล์แนบ">
+                                            <Paperclip size={16} />
+                                        </a>
+                                    ) : '-'}
+                                </td>
                                 <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
                                     {(record.status === 'draft' || record.status === 'rejected') && (
                                         <button onClick={() => { setEditingRecord(record); setShowModal(true); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium">แก้ไข</button>
@@ -365,6 +448,20 @@ const RecordModal = ({ record, onClose, fetchAPI }) => {
         reflection: record?.reflection || ''
     });
     const [isSaving, setIsSaving] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // File upload handler
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 10 * 1024 * 1024) {
+                alert('ขนาดไฟล์ต้องไม่เกิน 10MB');
+                return;
+            }
+            setSelectedFile(file);
+        }
+    };
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -385,8 +482,37 @@ const RecordModal = ({ record, onClose, fetchAPI }) => {
         try {
             const res = await fetchAPI('upsertRecord', payload);
             if (res.ok) {
-                alert('บันทึกข้อมูลเรียบร้อยแล้ว');
-                onClose();
+                // If there's a file, upload it after saving record is successful
+                if (selectedFile) {
+                    setIsUploading(true);
+                    try {
+                        const reader = new FileReader();
+                        reader.readAsDataURL(selectedFile);
+                        reader.onload = async () => {
+                            const base64Data = reader.result;
+                            const uploadRes = await fetchAPI('uploadFile', {
+                                recordId: res.data.recordId,
+                                fileName: selectedFile.name,
+                                mimeType: selectedFile.type,
+                                base64Data: base64Data
+                            });
+                            if (!uploadRes.ok) {
+                                alert('บันทึกข้อมูลสำเร็จ แต่ไม่สามารถอัปโหลดไฟล์ได้: ' + uploadRes.error?.message);
+                            } else {
+                                alert('บันทึกและอัปโหลดไฟล์เรียบร้อยแล้ว');
+                            }
+                            onClose();
+                        };
+                    } catch (err) {
+                        alert('เกิดข้อผิดพลาดในการอ่านไฟล์');
+                        onClose();
+                    } finally {
+                        setIsUploading(false);
+                    }
+                } else {
+                    alert('บันทึกข้อมูลเรียบร้อยแล้ว');
+                    onClose();
+                }
             } else {
                 alert('เกิดข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
             }
@@ -471,28 +597,48 @@ const RecordModal = ({ record, onClose, fetchAPI }) => {
 
                     <div className="space-y-4 pt-4 border-t">
                         <h4 className="font-semibold text-gray-800">หลักฐานแนบ</h4>
-                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 transition-colors cursor-pointer">
-                            <Upload className="mx-auto text-gray-400 mb-2" size={24} />
-                            <p className="text-sm text-gray-600 mb-1">คลิกเพื่ออัปโหลด หรือลากไฟล์มาวางที่นี่</p>
-                            <p className="text-xs text-gray-400">รองรับ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
-                        </div>
-                        <p className="text-center text-sm font-medium text-gray-500">หรือ</p>
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium text-gray-700">แนบลิงก์หลักฐาน (Google Drive/เว็บไซต์)</label>
-                            <input type="url" className="w-full p-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="https://" />
-                        </div>
+
+                        {(record?.attachments && record.attachments.length > 0) ? (
+                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="bg-blue-100 p-2 rounded-lg text-blue-600"><FileText size={20} /></div>
+                                    <div>
+                                        <p className="text-sm font-medium text-blue-900">{record.attachments[0].fileName}</p>
+                                        <a href={record.attachments[0].fileUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">ดูไฟล์แนบ</a>
+                                    </div>
+                                </div>
+                                <span className="text-xs bg-white px-2 py-1 rounded text-blue-500 border border-blue-200">อัปโหลดแล้ว</span>
+                            </div>
+                        ) : null}
+
+                        <label className="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer flex flex-col items-center justify-center relative overflow-hidden group">
+                            <input type="file" onChange={handleFileChange} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" accept=".pdf,.png,.jpg,.jpeg" />
+                            {selectedFile ? (
+                                <>
+                                    <CheckCircle className="text-green-500 mb-2" size={32} />
+                                    <p className="text-sm font-medium text-green-700">{selectedFile.name}</p>
+                                    <p className="text-xs text-gray-500 mt-1">{(selectedFile.size / 1024 / 1024).toFixed(2)} MB - คลิกเพื่อเปลี่ยนไฟล์</p>
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className="text-gray-400 mb-2 group-hover:text-blue-500 transition-colors" size={32} />
+                                    <p className="text-sm text-gray-600 mb-1 font-medium group-hover:text-blue-600 transition-colors">คลิกเพื่ออัปโหลดไฟล์หลักฐาน (เก็บลง Google Drive)</p>
+                                    <p className="text-xs text-gray-400">รองรับ PDF, JPG, PNG (ขนาดไม่เกิน 10MB)</p>
+                                </>
+                            )}
+                        </label>
                     </div>
                 </div>
 
                 <div className="px-6 py-4 border-t bg-gray-50 rounded-b-xl flex justify-end space-x-3">
-                    <button onClick={onClose} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-lg transition-colors border bg-white disabled:opacity-50">
+                    <button onClick={onClose} disabled={isSaving || isUploading} className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-200 rounded-full transition-colors bg-gray-100 disabled:opacity-50 border border-transparent">
                         ยกเลิก
                     </button>
-                    <button onClick={() => handleSave('draft')} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors disabled:opacity-50">
-                        {isSaving ? 'กำลังบันทึก...' : 'บันทึกร่าง'}
+                    <button onClick={() => handleSave('draft')} disabled={isSaving || isUploading} className="px-6 py-2.5 text-sm font-medium text-[#007AFF] bg-blue-50 hover:bg-blue-100 rounded-full transition-colors disabled:opacity-50 border border-transparent">
+                        {isSaving ? 'กำลังบันทึก...' : isUploading ? 'กำลังอัปโหลด...' : 'บันทึกร่าง'}
                     </button>
-                    <button onClick={() => handleSave('submitted')} disabled={isSaving} className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 shadow-sm rounded-lg transition-colors disabled:opacity-50">
-                        {isSaving ? 'กำลังบันทึก...' : 'บันทึกและส่งตรวจ'}
+                    <button onClick={() => handleSave('submitted')} disabled={isSaving || isUploading} className="px-6 py-2.5 text-sm font-medium text-white bg-[#007AFF] hover:bg-blue-600 apple-shadow rounded-full transition-colors disabled:opacity-50 border border-transparent">
+                        {isSaving ? 'กำลังบันทึก...' : isUploading ? 'กำลังอัปโหลด...' : 'บันทึกและส่งตรวจ'}
                     </button>
                 </div>
             </div>

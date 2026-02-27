@@ -117,6 +117,9 @@ function handleRequest(e, method) {
         requireAdmin();
         responseData = upsertUser(payload.user);
         break;
+      case 'uploadFile':
+        responseData = uploadFile(payload, currentUserEmail);
+        break;
       default:
         throw new Error("Invalid action or missing action parameter: " + action);
     }
@@ -244,6 +247,12 @@ function listRecords(filters, email) {
   if(filters) {
     if(filters.status) records = records.filter(r => r.status === filters.status);
   }
+  
+  const attachments = getSheetDataAsObjects('Attachments');
+  records.forEach(r => {
+    r.attachments = attachments.filter(a => a.recordId === r.recordId);
+  });
+  
   return records.reverse(); 
 }
 
@@ -331,4 +340,62 @@ function reviewRecord(recordId, actionType, comment, email) {
   saveObjectToSheet('Records', record, 'recordId');
   logAudit(email, 'REVIEW_RECORD', `ID: ${recordId}, Action: ${actionType}`);
   return record;
+}
+
+function getOrCreateAppFolder() {
+  const props = PropertiesService.getScriptProperties();
+  let folderId = props.getProperty('DRIVE_FOLDER_ID');
+  let folder;
+  
+  if (folderId) {
+    try {
+      folder = DriveApp.getFolderById(folderId);
+    } catch(e) {
+      folder = null;
+    }
+  }
+  
+  if (!folder) {
+    folder = DriveApp.createFolder('Teacher Dev Logs Attachments');
+    props.setProperty('DRIVE_FOLDER_ID', folder.getId());
+    
+    try {
+       const settingsSheet = getDB().getSheetByName('Settings');
+       const data = settingsSheet.getDataRange().getValues();
+       for(let i=0; i<data.length; i++) {
+          if(data[i][0] === 'driveFolderId') {
+             settingsSheet.getRange(i+1, 2).setValue(folder.getId());
+             break;
+          }
+       }
+    } catch(e) {}
+  }
+  return folder;
+}
+
+function uploadFile(payload, email) {
+  const { fileName, mimeType, base64Data, recordId } = payload;
+  if(!fileName || !base64Data || !recordId) throw new Error("Missing required file parameters");
+  
+  getRecord(recordId, email); 
+
+  const folder = getOrCreateAppFolder();
+  const blob = Utilities.newBlob(Utilities.base64Decode(base64Data.split(',')[1]), mimeType, fileName);
+  const file = folder.createFile(blob);
+  
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  
+  const attachmentRecord = {
+    fileId: file.getId(),
+    recordId: recordId,
+    fileName: fileName,
+    fileUrl: file.getUrl(),
+    mimeType: mimeType,
+    uploadedAt: Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss")
+  };
+  
+  const result = saveObjectToSheet('Attachments', attachmentRecord, 'fileId');
+  logAudit(email, 'UPLOAD_FILE', `User uploaded ${fileName} to record ${recordId}`);
+  
+  return result;
 }
