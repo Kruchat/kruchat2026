@@ -184,7 +184,7 @@ const LoginView = ({ onLogin, loading }) => {
 
                 <div className="w-full space-y-4">
                     <button
-                        onClick={onLogin}
+                        onClick={() => onLogin()}
                         disabled={loading}
                         className="w-full bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center disabled:opacity-50 relative group"
                     >
