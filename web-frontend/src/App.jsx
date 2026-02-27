@@ -3,7 +3,7 @@ import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings
 
 // === Configuration ===
 // นำ URL ที่ได้จากการ Deploy Google Apps Script มาวางที่นี่
-const GAS_API_URL = 'YOUR_GAS_WEB_APP_URL_HERE'; // TODO: Replace
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzI3UTyHWR03wkuAQkTosIDzDM9pGgg1MV9u8LUP6TaOUIHddNtN3d6CbyAevqXdd5V/exec'; // TODO: Replace
 
 // Mock Data for UI Dev
 const MOCK_USER = { email: 'teacher@school.ac.th', name: 'ครูสมใจ', role: 'teacher', status: 'active' };
