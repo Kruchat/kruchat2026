@@ -1,0 +1,58 @@
+name: Deploy Vite JS to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+
+  # อนุญาตให้คลิกรันแมนนวลจากแท็บ Actions ได้
+  workflow_dispatch:
+
+# จัดสรรสิทธิ์ของ GITHUB_TOKEN เพื่อให้ดันเว็บขึ้น Pages ได้
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# ห้ามรันบิ้วด์นี้ซ้ำซ้อนกัน
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # จ๊อบบรรจุไฟล์ (Build output)
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./web-frontend # ชื่อโฟลเดอร์ฝั่งหน้าบ้าน
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci || npm install
+
+      - name: Build Vite App
+        run: npm run build
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./web-frontend/dist
+
+  # จ๊อบพับบริชและ deploy ขึ้นระบบหน้าเว็บ
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
