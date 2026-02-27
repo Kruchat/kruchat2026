@@ -163,6 +163,11 @@ function getMeProcess(email) {
         upsertUser(user);
      }
   }
+  
+  if (user.status !== 'active') {
+      throw new Error("บัญชีของคุณถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ (Account Suspended)");
+  }
+  
   return user;
 }
 
@@ -170,6 +175,9 @@ function requireAdmin(currentUserEmail) {
   const user = getUser(currentUserEmail);
   if (!user || user.role !== 'admin') {
     throw new Error('Permission denied: Admin only');
+  }
+  if (user.status !== 'active') {
+    throw new Error('Permission denied: Account suspended');
   }
 }
 
