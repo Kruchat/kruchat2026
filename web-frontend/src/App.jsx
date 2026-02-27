@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check, Paperclip } from 'lucide-react';
+import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check, Paperclip, Menu } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // === Configuration ===
@@ -12,6 +12,7 @@ export default function App() {
     const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, records, review, users, settings
     const [loading, setLoading] = useState(false);
     const [isCheckingAutoLogin, setIsCheckingAutoLogin] = useState(true);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Auto-login on mount
     useEffect(() => {
@@ -104,14 +105,33 @@ export default function App() {
     };
 
     return (
-        <div className="flex h-screen bg-gray-50 text-sm md:text-base">
-            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} />
+        <div className="flex h-screen bg-gray-50 text-sm md:text-base overflow-hidden">
+            {/* Desktop Sidebar */}
+            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} className="hidden md:flex" />
+
+            {/* Mobile Sidebar Overlay */}
+            {isMobileMenuOpen && (
+                <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)}>
+                    <div className="absolute top-0 left-0 bottom-0 w-64 bg-slate-800 shadow-xl" onClick={e => e.stopPropagation()}>
+                        <Sidebar activeTab={activeTab} setActiveTab={(tab) => { setActiveTab(tab); setIsMobileMenuOpen(false); }} user={currentUser} onLogout={handleLogout} className="flex h-full" />
+                    </div>
+                </div>
+            )}
+
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-                <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
-                    <h1 className="text-xl font-semibold text-gray-800">ระบบบันทึกการพัฒนาตนเอง</h1>
-                    <div className="flex items-center space-x-4">
+                <header className="bg-white border-b px-4 md:px-6 py-4 flex justify-between items-center shadow-sm z-10">
+                    <div className="flex items-center space-x-3">
+                        <button
+                            className="md:hidden p-2 -ml-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                            onClick={() => setIsMobileMenuOpen(true)}
+                        >
+                            <Menu size={24} />
+                        </button>
+                        <h1 className="text-xl font-semibold text-gray-800"><span className="hidden sm:inline">ระบบ</span>บันทึกการพัฒนาตนเอง</h1>
+                    </div>
+                    <div className="flex items-center space-x-2 md:space-x-4">
                         <span className="text-gray-600 hidden md:inline-block">ยินดีต้อนรับ, {currentUser.name}</span>
-                        <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium uppercase tracking-wider">{currentUser.role}</span>
+                        <span className="px-2 md:px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-[10px] md:text-xs font-medium uppercase tracking-wider">{currentUser.role}</span>
                     </div>
                 </header>
                 <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6 relative">
@@ -179,7 +199,7 @@ const LoginView = ({ onLogin, loading }) => {
 
 // === Components ===
 
-const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
+const Sidebar = ({ activeTab, setActiveTab, user, onLogout, className = "hidden md:flex" }) => {
     const navItems = [
         { id: 'dashboard', label: 'ภาพรวม', icon: <Home size={20} />, roles: ['teacher', 'admin'] },
         { id: 'records', label: 'บันทึกของฉัน', icon: <FileText size={20} />, roles: ['teacher', 'admin'] },
@@ -189,7 +209,7 @@ const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
     ];
 
     return (
-        <div className="w-64 bg-slate-800 text-white flex flex-col hidden md:flex">
+        <div className={`w-64 bg-slate-800 text-white flex-col ${className}`}>
             <div className="p-6">
                 <h2 className="text-2xl font-bold tracking-tight text-white mb-1"><span className="text-blue-400">Teacher</span>DevLog</h2>
                 <p className="text-slate-400 text-xs">Self-Development System</p>
