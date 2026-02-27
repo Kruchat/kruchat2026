@@ -124,6 +124,14 @@ function handleRequest(e, method) {
         requireAdmin(currentUserEmail);
         responseData = upsertUser(payload.user);
         break;
+      case 'updateUser':
+        requireAdmin(currentUserEmail);
+        responseData = updateUser(payload.targetEmail, payload.updates, currentUserEmail);
+        break;
+      case 'deleteUser':
+        requireAdmin(currentUserEmail);
+        responseData = deleteUser(payload.targetEmail, currentUserEmail);
+        break;
       case 'uploadFile':
         responseData = uploadFile(payload, currentUserEmail);
         break;
@@ -235,6 +243,54 @@ function upsertUser(userObj) {
   const result = saveObjectToSheet('Users', userObj, 'email');
   logAudit(Session.getActiveUser().getEmail(), 'UPSERT_USER', result.email);
   return result;
+}
+
+function updateUser(targetEmail, updates, currentUserEmail) {
+  if (!targetEmail || !updates) throw new Error("Missing parameters for updateUser");
+  const user = getUser(targetEmail);
+  if (!user) throw new Error("User not found: " + targetEmail);
+
+  if (targetEmail === currentUserEmail) {
+     if (updates.role && updates.role !== 'admin') throw new Error("Cannot demote yourself");
+     if (updates.status && updates.status !== 'active') throw new Error("Cannot deactivate yourself");
+  }
+
+  const updatedUser = { ...user, ...updates };
+  updatedUser.updatedAt = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
+  
+  const result = saveObjectToSheet('Users', updatedUser, 'email');
+  logAudit(currentUserEmail, 'UPDATE_USER', `Updated user: ${targetEmail}`);
+  return result;
+}
+
+function deleteUser(targetEmail, currentUserEmail) {
+  if (targetEmail === currentUserEmail) throw new Error("Cannot delete your own account");
+  const user = getUser(targetEmail);
+  if (!user) throw new Error("User not found: " + targetEmail);
+  
+  const lock = LockService.getScriptLock();
+  lock.waitLock(5000);
+  try {
+    const sheet = getDB().getSheetByName('Users');
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const emailIndex = headers.indexOf('email');
+    
+    let deleted = false;
+    for(let i=1; i<data.length; i++) {
+       if(data[i][emailIndex] === targetEmail) {
+          sheet.deleteRow(i + 1);
+          deleted = true;
+          break;
+       }
+    }
+    if (!deleted) throw new Error("User row not found to delete");
+  } finally {
+    lock.releaseLock();
+  }
+  
+  logAudit(currentUserEmail, 'DELETE_USER', targetEmail);
+  return { success: true, email: targetEmail };
 }
 
 function getCompetencies() {

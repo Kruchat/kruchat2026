@@ -733,17 +733,63 @@ const ReviewView = ({ user, fetchAPI }) => {
 
 const UsersView = ({ user, fetchAPI }) => {
     const [usersList, setUsersList] = useState([]);
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const loadUsers = async () => {
+        const res = await fetchAPI('getUsers');
+        if (res && res.ok) {
+            setUsersList(res.data || []);
+        }
+    };
 
     useEffect(() => {
-        const loadUsers = async () => {
-            const res = await fetchAPI('getUsers');
-            if (res && res.ok) {
-                setUsersList(res.data || []);
-            }
-        };
         loadUsers();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user]);
+
+    const handleRoleChange = async (targetEmail, currentRole) => {
+        if (targetEmail === user.email) {
+            alert('ไม่สามารถเปลี่ยนสิทธิ์ของตัวเองได้');
+            return;
+        }
+        const newRole = currentRole === 'admin' ? 'teacher' : 'admin';
+        if (confirm(`ยืนยันการตั้งเป็น ${newRole.toUpperCase()} ใช่หรือไม่?`)) {
+            setIsProcessing(true);
+            const res = await fetchAPI('updateUser', { targetEmail, updates: { role: newRole } });
+            if (res.ok) await loadUsers();
+            else alert('ข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
+            setIsProcessing(false);
+        }
+    };
+
+    const handleStatusChange = async (targetEmail, currentStatus) => {
+        if (targetEmail === user.email) {
+            alert('ไม่สามารถระงับการใช้งานของตัวเองได้');
+            return;
+        }
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        if (confirm(`ยืนยันการเปลี่ยนสถานะเป็น ${newStatus} ใช่หรือไม่?`)) {
+            setIsProcessing(true);
+            const res = await fetchAPI('updateUser', { targetEmail, updates: { status: newStatus } });
+            if (res.ok) await loadUsers();
+            else alert('ข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
+            setIsProcessing(false);
+        }
+    };
+
+    const handleDeleteUser = async (targetEmail) => {
+        if (targetEmail === user.email) {
+            alert('ไม่สามารถลบบัญชีของตัวเองได้');
+            return;
+        }
+        if (confirm(`คำเตือน: ยืนยันการลบบัญชี ${targetEmail} อย่างถาวรใช่หรือไม่?\n(ข้อมูลจะไม่สามารถกู้คืนได้)`)) {
+            setIsProcessing(true);
+            const res = await fetchAPI('deleteUser', { targetEmail });
+            if (res.ok) await loadUsers();
+            else alert('ข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
+            setIsProcessing(false);
+        }
+    };
 
     return (
         <div className="bg-white rounded-xl shadow-sm border p-6">
@@ -754,23 +800,51 @@ const UsersView = ({ user, fetchAPI }) => {
                         <tr>
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600">อีเมล</th>
                             <th className="px-4 py-3 text-sm font-semibold text-gray-600">ชื่อ</th>
-                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">สิทธิ์</th>
-                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">สถานะ</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">สิทธิ์</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-center">สถานะ</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y text-sm">
                         {usersList.length === 0 ? (
-                            <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
+                            <tr><td colSpan="5" className="px-4 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
                         ) : usersList.map(u => (
-                            <tr key={u.email} className="hover:bg-gray-50">
+                            <tr key={u.email} className="hover:bg-gray-50 transition-colors">
                                 <td className="px-4 py-3">{u.email}</td>
                                 <td className="px-4 py-3">{u.name}</td>
-                                <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                                <td className="px-4 py-3 text-center">
+                                    <button
+                                        onClick={() => handleRoleChange(u.email, u.role)}
+                                        disabled={isProcessing || u.email === user.email}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border 
+                                            ${u.role === 'admin'
+                                                ? 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                                                : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100'}`}
+                                    >
                                         {u.role.toUpperCase()}
-                                    </span>
+                                    </button>
                                 </td>
-                                <td className="px-4 py-3">{u.status}</td>
+                                <td className="px-4 py-3 text-center">
+                                    <button
+                                        onClick={() => handleStatusChange(u.email, u.status)}
+                                        disabled={isProcessing || u.email === user.email}
+                                        className={`px-3 py-1.5 rounded-full text-xs font-semibold tracking-wider transition-colors disabled:opacity-50 border
+                                            ${u.status === 'active'
+                                                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                                                : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+                                    >
+                                        {u.status.toUpperCase()}
+                                    </button>
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                    <button
+                                        onClick={() => handleDeleteUser(u.email)}
+                                        disabled={isProcessing || u.email === user.email}
+                                        className="text-red-500 hover:text-red-700 font-medium text-sm transition-colors py-1 px-3 rounded-lg hover:bg-red-50 disabled:opacity-30 border border-transparent hover:border-red-100"
+                                    >
+                                        ลบผู้ใช้
+                                    </button>
+                                </td>
                             </tr>
                         ))}
                     </tbody>
