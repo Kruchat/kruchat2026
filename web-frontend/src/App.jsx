@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check } from 'lucide-react';
 
 // === Configuration ===
@@ -32,7 +32,7 @@ export default function App() {
         initLogin();
     }, []);
 
-    const fetchAPI = async (action, payload = {}) => {
+    const fetchAPI = useCallback(async (action, payload = {}) => {
         if (GAS_API_URL.includes('YOUR_GAS_WEB_APP_URL_HERE')) {
             console.warn('API URL not set');
             return { ok: false, error: { message: "API URL not set" } };
@@ -51,7 +51,7 @@ export default function App() {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const handleLoginClick = async () => {
         const res = await fetchAPI('getMe');
