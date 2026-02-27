@@ -197,22 +197,45 @@ const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
 
 // === Views ===
 
-const DashboardView = ({ user }) => (
-    <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card title="ชั่วโมงสะสมปีนี้" value="45" subtitle="เป้าหมาย: 20 ชั่วโมง" icon={<Clock className="text-blue-500" size={24} />} />
-            <Card title="รายการรอตรวจ" value="2" subtitle="รอการอนุมัติรับรอง" icon={<FileText className="text-yellow-500" size={24} />} />
-            <Card title="ผ่านการอนุมัติแล้ว" value="5" subtitle="รายการวิทยฐานะ" icon={<CheckCircle className="text-green-500" size={24} />} />
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h3 className="text-lg font-medium mb-4">กิจกรรมล่าสุด</h3>
-            <div className="text-center py-10 text-gray-500">
-                <FileCode size={48} className="mx-auto text-gray-300 mb-3" />
-                <p>ยังไม่มีกิจกรรมล่าสุด กรุณาเพิ่มบันทึกการพัฒนาตนเอง</p>
+const DashboardView = ({ user, fetchAPI }) => {
+    const [stats, setStats] = useState({ totalHours: 0, pending: 0, approved: 0 });
+
+    useEffect(() => {
+        const loadStats = async () => {
+            const res = await fetchAPI('listRecords');
+            if (res && res.ok) {
+                const records = res.data || [];
+                let h = 0, p = 0, a = 0;
+                records.forEach(r => {
+                    if (r.status === 'approved') {
+                        a++;
+                        h += Number(r.hours) || 0;
+                    }
+                    if (r.status === 'submitted') p++;
+                });
+                setStats({ totalHours: h, pending: p, approved: a });
+            }
+        };
+        loadStats();
+    }, [user, fetchAPI]);
+
+    return (
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Card title="ชั่วโมงสะสมปีนี้ (ผ่านแล้ว)" value={stats.totalHours} subtitle="เป้าหมาย: 20 ชั่วโมง" icon={<Clock className="text-blue-500" size={24} />} />
+                <Card title="รายการรอตรวจ" value={stats.pending} subtitle="รอการอนุมัติรับรอง" icon={<FileText className="text-yellow-500" size={24} />} />
+                <Card title="ผ่านการอนุมัติแล้ว" value={stats.approved} subtitle="รายการกิจกรรม" icon={<CheckCircle className="text-green-500" size={24} />} />
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border p-6">
+                <h3 className="text-lg font-medium mb-4">กิจกรรมล่าสุด</h3>
+                <div className="text-center py-10 text-gray-500">
+                    <FileCode size={48} className="mx-auto text-gray-300 mb-3" />
+                    <p>เข้าสู่เมนู "บันทึกของฉัน" เพื่อดูรายการกิจกรรมทั้งหมด</p>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 const Card = ({ title, value, subtitle, icon }) => (
     <div className="bg-white rounded-xl shadow-sm border p-6 flex items-start space-x-4 hover:shadow-md transition-shadow">
@@ -225,8 +248,40 @@ const Card = ({ title, value, subtitle, icon }) => (
     </div>
 );
 
-const RecordsView = ({ user }) => {
+const RecordsView = ({ user, fetchAPI }) => {
     const [showModal, setShowModal] = useState(false);
+    const [records, setRecords] = useState([]);
+    const [editingRecord, setEditingRecord] = useState(null);
+
+    const loadRecords = async () => {
+        const res = await fetchAPI('listRecords');
+        if (res && res.ok) {
+            setRecords(res.data || []);
+        }
+    };
+
+    useEffect(() => {
+        loadRecords();
+    }, [user, fetchAPI]);
+
+    const handleDelete = async (recordId) => {
+        if (!confirm('ยืนยันการลบรายการนี้?')) return;
+        const res = await fetchAPI('deleteRecord', { recordId });
+        if (res.ok) {
+            loadRecords();
+        } else {
+            alert('ลบไม่สำเร็จ: ' + res.error?.message);
+        }
+    };
+
+    const StatusBadge = ({ status }) => {
+        switch (status) {
+            case 'approved': return <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs">ผ่านแล้ว</span>;
+            case 'submitted': return <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">รอตรวจ</span>;
+            case 'rejected': return <span className="px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs">ส่งกลับ</span>;
+            default: return <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">ร่าง</span>;
+        }
+    };
 
     return (
         <div className="bg-white rounded-xl shadow-sm border flex flex-col h-full">
@@ -236,7 +291,7 @@ const RecordsView = ({ user }) => {
                     <p className="text-gray-500 text-sm">จัดการข้อมูลการพัฒนาตนเองของคุณทั้งหมดที่นี่</p>
                 </div>
                 <button
-                    onClick={() => setShowModal(true)}
+                    onClick={() => { setEditingRecord(null); setShowModal(true); }}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 transition-colors shadow-sm"
                 >
                     <Plus size={16} />
@@ -249,14 +304,6 @@ const RecordsView = ({ user }) => {
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                     <input type="text" placeholder="ค้นหากิจกรรม..." className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
                 </div>
-                <button className="bg-white border text-gray-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 hover:bg-gray-50">
-                    <Filter size={16} />
-                    <span>ตัวกรอง</span>
-                </button>
-                <button className="bg-white border text-gray-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center space-x-2 hover:bg-gray-50">
-                    <Download size={16} />
-                    <span>ส่งออกรายงาน</span>
-                </button>
             </div>
 
             <div className="flex-1 overflow-auto p-0">
@@ -272,24 +319,50 @@ const RecordsView = ({ user }) => {
                         </tr>
                     </thead>
                     <tbody className="divide-y text-sm">
-                        <tr>
-                            <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
-                                ไม่มีข้อมูลบันทึก กดปุ่ม "เพิ่มรายการใหม่" เพื่อเริ่มต้น
-                            </td>
-                        </tr>
+                        {records.length === 0 ? (
+                            <tr>
+                                <td colSpan="6" className="px-6 py-12 text-center text-gray-500">
+                                    ไม่มีข้อมูลบันทึก กดปุ่ม "เพิ่มรายการใหม่" เพื่อเริ่มต้น
+                                </td>
+                            </tr>
+                        ) : records.map(record => (
+                            <tr key={record.recordId} className="hover:bg-gray-50">
+                                <td className="px-6 py-4 font-medium text-gray-900">{record.title}</td>
+                                <td className="px-6 py-4 text-gray-500">{record.activityType}</td>
+                                <td className="px-6 py-4 text-gray-500">
+                                    {record.startDate ? new Date(record.startDate).toLocaleDateString('th-TH') : '-'}
+                                </td>
+                                <td className="px-6 py-4 text-center text-gray-500">{record.hours}</td>
+                                <td className="px-6 py-4 text-center"><StatusBadge status={record.status} /></td>
+                                <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
+                                    {(record.status === 'draft' || record.status === 'rejected') && (
+                                        <button onClick={() => { setEditingRecord(record); setShowModal(true); }} className="text-blue-600 hover:text-blue-800 text-sm font-medium">แก้ไข</button>
+                                    )}
+                                    <button onClick={() => handleDelete(record.recordId)} className="text-red-600 hover:text-red-800 text-sm font-medium">ลบ</button>
+                                </td>
+                            </tr>
+                        ))}
                     </tbody>
                 </table>
             </div>
 
-            {showModal && <RecordModal onClose={() => setShowModal(false)} />}
+            {showModal && <RecordModal record={editingRecord} onClose={() => { setShowModal(false); setEditingRecord(null); loadRecords(); }} fetchAPI={fetchAPI} />}
         </div>
     );
 };
 
-const RecordModal = ({ onClose, fetchAPI }) => {
+const RecordModal = ({ record, onClose, fetchAPI }) => {
     const [formData, setFormData] = useState({
-        title: '', activityType: '', format: 'onsite', startDate: '', endDate: '',
-        organizer: '', hours: '', expectedGoal: '', reflection: ''
+        recordId: record?.recordId || '',
+        title: record?.title || '',
+        activityType: record?.activityType || '',
+        format: record?.format || 'onsite',
+        startDate: (record?.startDate ? record.startDate.split('T')[0] : '') || '',
+        endDate: (record?.endDate ? record.endDate.split('T')[0] : '') || '',
+        organizer: record?.organizer || '',
+        hours: record?.hours || '',
+        expectedGoal: record?.expectedGoal || '',
+        reflection: record?.reflection || ''
     });
     const [isSaving, setIsSaving] = useState(false);
 
@@ -328,7 +401,7 @@ const RecordModal = ({ onClose, fetchAPI }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
                 <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl">
-                    <h3 className="text-lg font-bold text-gray-800">เพิ่มบันทึกการพัฒนาตนเอง</h3>
+                    <h3 className="text-lg font-bold text-gray-800">{formData.recordId ? 'แก้ไขบันทึก' : 'เพิ่มบันทึกการพัฒนาตนเอง'}</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
                         <XCircle size={24} />
                     </button>
@@ -427,7 +500,133 @@ const RecordModal = ({ onClose, fetchAPI }) => {
     );
 };
 
-// Admins Views Placeholders
-const ReviewView = () => <div className="p-6 text-center text-gray-500 bg-white rounded-xl border shadow-sm">ฟังก์ชันสำหรับรอตรวจ (Admin Only)</div>;
-const UsersView = () => <div className="p-6 text-center text-gray-500 bg-white rounded-xl border shadow-sm">จัดการผู้ใช้ระบบ (Admin Only)</div>;
-const SettingsView = () => <div className="p-6 text-center text-gray-500 bg-white rounded-xl border shadow-sm">ตั้งค่าระบบ (Admin Only)</div>;
+// Admins Views
+const ReviewView = ({ user, fetchAPI }) => {
+    const [records, setRecords] = useState([]);
+
+    const loadRecords = async () => {
+        const res = await fetchAPI('listRecords', { status: 'submitted' });
+        if (res && res.ok) {
+            setRecords((res.data || []).filter(r => r.status === 'submitted'));
+        }
+    };
+
+    useEffect(() => {
+        loadRecords();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
+
+    const handleReview = async (recordId, actionType) => {
+        const comment = actionType === 'reject' ? prompt('เหตุผลที่ส่งกลับ (ถ้ามี):') : '';
+        if (actionType === 'reject' && comment === null) return;
+
+        const reviewAction = actionType === 'approve' ? 'approved' : 'rejected';
+        const res = await fetchAPI('reviewRecord', { recordId, reviewAction, comment });
+        if (res.ok) {
+            alert('ดำเนินการเรียบร้อย');
+            loadRecords();
+        } else {
+            alert('เกิดข้อผิดพลาด: ' + (res.error?.message || 'ไม่ทราบสาเหตุ'));
+        }
+    };
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">รายการรอตรวจ (Admin)</h2>
+            <div className="overflow-auto">
+                <table className="w-full text-left border-collapse min-w-[600px]">
+                    <thead className="bg-gray-50 border-b">
+                        <tr>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">ผู้ส่ง</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">ชื่อกิจกรรม</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">ชั่วโมง</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600 text-right">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y text-sm">
+                        {records.length === 0 ? (
+                            <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-500">ไม่มีรายการรอดำเนินการ</td></tr>
+                        ) : records.map(record => (
+                            <tr key={record.recordId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">{record.ownerEmail}</td>
+                                <td className="px-4 py-3">{record.title}</td>
+                                <td className="px-4 py-3">{record.hours}</td>
+                                <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                                    <button onClick={() => handleReview(record.recordId, 'approve')} className="text-green-700 bg-green-100 font-medium hover:bg-green-200 px-3 py-1 rounded-md transition-colors">อนุมัติ</button>
+                                    <button onClick={() => handleReview(record.recordId, 'reject')} className="text-red-700 bg-red-100 font-medium hover:bg-red-200 px-3 py-1 rounded-md transition-colors">ส่งกลับ</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const UsersView = ({ user, fetchAPI }) => {
+    const [usersList, setUsersList] = useState([]);
+
+    useEffect(() => {
+        const loadUsers = async () => {
+            const res = await fetchAPI('getUsers');
+            if (res && res.ok) {
+                setUsersList(res.data || []);
+            }
+        };
+        loadUsers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user]);
+
+    return (
+        <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-xl font-bold text-gray-800 mb-4">จัดการผู้ใช้ระบบ (Admin)</h2>
+            <div className="overflow-auto">
+                <table className="w-full text-left border-collapse min-w-[500px]">
+                    <thead className="bg-gray-50 border-b">
+                        <tr>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">อีเมล</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">ชื่อ</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">สิทธิ์</th>
+                            <th className="px-4 py-3 text-sm font-semibold text-gray-600">สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y text-sm">
+                        {usersList.length === 0 ? (
+                            <tr><td colSpan="4" className="px-4 py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td></tr>
+                        ) : usersList.map(u => (
+                            <tr key={u.email} className="hover:bg-gray-50">
+                                <td className="px-4 py-3">{u.email}</td>
+                                <td className="px-4 py-3">{u.name}</td>
+                                <td className="px-4 py-3">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-700'}`}>
+                                        {u.role.toUpperCase()}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3">{u.status}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+};
+
+const SettingsView = () => (
+    <div className="bg-white rounded-xl border p-8 space-y-6 shadow-sm">
+        <div>
+            <h2 className="text-xl font-bold text-gray-800 flex items-center mb-2"><Settings className="mr-2" size={24} /> ตั้งค่าระบบ (Admin Only)</h2>
+            <p className="text-gray-500 text-sm mb-6">ขณะนี้ระบบกำลังพัฒนาส่วนของ UI ผู้ดูแลสามารถทำการตั้งค่าเพิ่มเติมได้โดยการเข้าไปที่ Google Sheets ของระบบ</p>
+        </div>
+
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg">
+            <h3 className="font-semibold text-blue-800 mb-2">วิธีตั้งค่าเป้าหมายชั่วโมงการพัฒนา</h3>
+            <ol className="list-decimal list-inside text-sm text-blue-700 space-y-1">
+                <li>เปิดไฟล์ <strong>Teacher Dev Log DB</strong> ขึ้นมา (Google Sheet)</li>
+                <li>ไปที่ชีต <strong>Settings</strong></li>
+                <li>แก้ไขค่า <strong>20</strong> ในเครื่องหมาย <code>targetHoursPerYear</code></li>
+            </ol>
+        </div>
+    </div>
+);
