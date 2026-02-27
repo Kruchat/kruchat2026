@@ -4,7 +4,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 
 // === Configuration ===
 // นำ URL ที่ได้จากการ Deploy Google Apps Script มาวางที่นี่
-const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzI3UTyHWR03wkuAQkTosIDzDM9pGgg1MV9u8LUP6TaOUIHddNtN3d6CbyAevqXdd5V/exec'; // TODO: Replace
+const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxhjBgP7lhCTIwIegwl3yweU0b602hcBEJ4tvq8NO8nFsxm6jwXL7_maODDel6_rBL6/exec'; // TODO: Replace
 
 export default function App() {
     const [currentUser, setCurrentUser] = useState(null);
