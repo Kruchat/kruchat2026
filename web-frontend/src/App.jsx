@@ -1,23 +1,41 @@
 import { useState, useEffect } from 'react';
-import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode } from 'lucide-react';
+import { Download, Upload, Plus, FileText, CheckCircle, XCircle, Clock, Settings, Users, Home, Search, Filter, LogOut, FileCode, Check } from 'lucide-react';
 
 // === Configuration ===
 // นำ URL ที่ได้จากการ Deploy Google Apps Script มาวางที่นี่
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbzI3UTyHWR03wkuAQkTosIDzDM9pGgg1MV9u8LUP6TaOUIHddNtN3d6CbyAevqXdd5V/exec'; // TODO: Replace
 
-// Mock Data for UI Dev
-const MOCK_USER = { email: 'teacher@school.ac.th', name: 'ครูสมใจ', role: 'teacher', status: 'active' };
-
 export default function App() {
-    const [currentUser, setCurrentUser] = useState(MOCK_USER);
+    const [currentUser, setCurrentUser] = useState(null);
     const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, records, review, users, settings
     const [loading, setLoading] = useState(false);
+    const [isCheckingAutoLogin, setIsCheckingAutoLogin] = useState(true);
 
-    // Example of API call pattern
+    // Auto-login on mount
+    useEffect(() => {
+        const initLogin = async () => {
+            if (GAS_API_URL.includes('YOUR_GAS_WEB_APP_URL_HERE')) {
+                setIsCheckingAutoLogin(false);
+                return;
+            }
+            try {
+                const res = await fetchAPI('getMe');
+                if (res && res.ok && res.data) {
+                    setCurrentUser(res.data);
+                }
+            } catch (e) {
+                console.error("Auto login failed", e);
+            } finally {
+                setIsCheckingAutoLogin(false);
+            }
+        };
+        initLogin();
+    }, []);
+
     const fetchAPI = async (action, payload = {}) => {
-        if (GAS_API_URL === 'YOUR_GAS_WEB_APP_URL_HERE') {
-            console.warn('API URL not set, returning mock data');
-            return { ok: true, data: [] };
+        if (GAS_API_URL.includes('YOUR_GAS_WEB_APP_URL_HERE')) {
+            console.warn('API URL not set');
+            return { ok: false, error: { message: "API URL not set" } };
         }
         setLoading(true);
         try {
@@ -29,11 +47,39 @@ export default function App() {
             return json;
         } catch (e) {
             console.error(e);
-            return { ok: false, error: e.message };
+            return { ok: false, error: { message: e.message } };
         } finally {
             setLoading(false);
         }
     };
+
+    const handleLoginClick = async () => {
+        const res = await fetchAPI('getMe');
+        if (res && res.ok && res.data) {
+            setCurrentUser(res.data);
+        } else {
+            alert('ไม่สามารถเข้าสู่ระบบได้ กรุณาตรวจสอบว่าท่านได้เปิดสิทธิ์ของแอป (Authorization) แล้วหรือไม่');
+        }
+    };
+
+    const handleLogout = () => {
+        setCurrentUser(null);
+    };
+
+    if (isCheckingAutoLogin) {
+        return (
+            <div className="flex h-screen items-center justify-center bg-gray-50">
+                <div className="text-center">
+                    <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-600">กำลังตรวจสอบข้อมูลผู้ใช้...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!currentUser) {
+        return <LoginView onLogin={handleLoginClick} loading={loading} />;
+    }
 
     const renderContent = () => {
         switch (activeTab) {
@@ -48,7 +94,7 @@ export default function App() {
 
     return (
         <div className="flex h-screen bg-gray-50 text-sm md:text-base">
-            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} />
+            <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} user={currentUser} onLogout={handleLogout} />
             <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
                 <header className="bg-white border-b px-6 py-4 flex justify-between items-center shadow-sm z-10">
                     <h1 className="text-xl font-semibold text-gray-800">ระบบบันทึกการพัฒนาตนเอง</h1>
@@ -57,7 +103,15 @@ export default function App() {
                         <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium uppercase tracking-wider">{currentUser.role}</span>
                     </div>
                 </header>
-                <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6">
+                <main className="flex-1 overflow-auto p-4 md:p-6 pb-20 md:pb-6 relative">
+                    {loading && (
+                        <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
+                            <div className="px-4 py-2 bg-white rounded-lg shadow-md border flex items-center space-x-3 text-blue-600">
+                                <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                <span className="font-medium">กำลังโหลด...</span>
+                            </div>
+                        </div>
+                    )}
                     {renderContent()}
                 </main>
             </div>
@@ -67,7 +121,43 @@ export default function App() {
 
 // === Components ===
 
-const Sidebar = ({ activeTab, setActiveTab, user }) => {
+const LoginView = ({ onLogin, loading }) => (
+    <div className="flex h-screen bg-gray-50 items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border">
+            <div className="p-8 text-center bg-slate-800">
+                <h2 className="text-3xl font-bold tracking-tight text-white mb-2"><span className="text-blue-400">Teacher</span>DevLog</h2>
+                <p className="text-slate-300 text-sm">ระบบบันทึกและติดตามการพัฒนาตนเองของครู</p>
+            </div>
+            <div className="p-8 space-y-6">
+                <p className="text-center text-gray-600 text-sm">
+                    กรุณาเข้าสู่ระบบด้วยบัญชี Google ของสถานศึกษาเพื่อเริ่มต้นใช้งานระบบ
+                </p>
+                <button
+                    onClick={onLogin}
+                    disabled={loading}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors shadow-sm flex items-center justify-center disabled:opacity-70"
+                >
+                    {loading ? (
+                        <>
+                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            กำลังตรวจสอบ...
+                        </>
+                    ) : (
+                        "เข้าสู่ระบบด้วย Google"
+                    )}
+                </button>
+            </div>
+            <div className="bg-slate-50 p-6 border-t text-xs text-center text-gray-500 space-y-2">
+                <p className="font-medium text-gray-700">คำแนะนำสำหรับผู้ใช้งานใหม่</p>
+                <p>หากคุณพบปัญหาในการเข้าสู่ระบบ โปรดแน่ใจว่าคุณได้กดเปิดสิทธิ์การใช้งาน (Authorization) ในหน้า Web App ของ Google แล้ว</p>
+            </div>
+        </div>
+    </div>
+);
+
+// === Components ===
+
+const Sidebar = ({ activeTab, setActiveTab, user, onLogout }) => {
     const navItems = [
         { id: 'dashboard', label: 'ภาพรวม', icon: <Home size={20} />, roles: ['teacher', 'admin'] },
         { id: 'records', label: 'บันทึกของฉัน', icon: <FileText size={20} />, roles: ['teacher', 'admin'] },
@@ -96,7 +186,7 @@ const Sidebar = ({ activeTab, setActiveTab, user }) => {
                 ))}
             </nav>
             <div className="p-4 border-t border-slate-700">
-                <button className="w-full flex items-center space-x-3 px-4 py-2 text-slate-300 hover:text-white transition-colors">
+                <button onClick={onLogout} className="w-full flex items-center space-x-3 px-4 py-2 text-slate-300 hover:text-white transition-colors">
                     <LogOut size={20} />
                     <span>ออกจากระบบ</span>
                 </button>
