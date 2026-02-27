@@ -74,7 +74,14 @@ function handleRequest(e, method) {
     const action = payload.action || (e.parameter && e.parameter.action);
     let responseData = null;
     
-    const currentUserEmail = Session.getActiveUser().getEmail();
+    // For local development, allow email to be passed in payload if Session is empty
+    let currentUserEmail = Session.getActiveUser().getEmail();
+    if (!currentUserEmail && payload.email) {
+       currentUserEmail = payload.email;
+    }
+    
+    if(!currentUserEmail) throw new Error("Authentication failed: No email found");
+
     const currentUser = getUser(currentUserEmail);
     if(!currentUser && action !== 'getMe') {
        const sheet = getDB().getSheetByName('Users');
@@ -85,7 +92,7 @@ function handleRequest(e, method) {
 
     switch(action) {
       case 'getMe':
-        responseData = getMeProcess();
+        responseData = getMeProcess(currentUserEmail);
         break;
       case 'listRecords':
         responseData = listRecords(payload, currentUserEmail);
@@ -100,7 +107,7 @@ function handleRequest(e, method) {
         responseData = changeRecordStatus(payload.recordId, 'submitted', currentUserEmail);
         break;
       case 'reviewRecord':
-        requireAdmin();
+        requireAdmin(currentUserEmail);
         responseData = reviewRecord(payload.recordId, payload.reviewAction, payload.comment, currentUserEmail);
         break;
       case 'deleteRecord':
@@ -110,11 +117,11 @@ function handleRequest(e, method) {
         responseData = getCompetencies();
         break;
       case 'getUsers':
-        requireAdmin();
+        requireAdmin(currentUserEmail);
         responseData = getAllUsers();
         break;
       case 'upsertUser':
-        requireAdmin();
+        requireAdmin(currentUserEmail);
         responseData = upsertUser(payload.user);
         break;
       case 'uploadFile':
@@ -136,8 +143,7 @@ function buildResponse(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
-function getMeProcess() {
-  const email = Session.getActiveUser().getEmail();
+function getMeProcess(email) {
   let user = getUser(email);
   if(!user) {
      const sheet = getDB().getSheetByName('Users');
@@ -152,9 +158,8 @@ function getMeProcess() {
   return user;
 }
 
-function requireAdmin() {
-  const email = Session.getActiveUser().getEmail();
-  const user = getUser(email);
+function requireAdmin(currentUserEmail) {
+  const user = getUser(currentUserEmail);
   if (!user || user.role !== 'admin') {
     throw new Error('Permission denied: Admin only');
   }

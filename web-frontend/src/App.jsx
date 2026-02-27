@@ -54,12 +54,13 @@ export default function App() {
         }
     }, []);
 
-    const handleLoginClick = async () => {
-        const res = await fetchAPI('getMe');
+    const handleLoginClick = async (emailInput) => {
+        // Send emailInput to backend if available (useful for local dev testing)
+        const res = await fetchAPI('getMe', { email: emailInput });
         if (res && res.ok && res.data) {
             setCurrentUser(res.data);
         } else {
-            alert('ไม่สามารถเข้าสู่ระบบได้ กรุณาตรวจสอบว่าท่านได้เปิดสิทธิ์ของแอป (Authorization) แล้วหรือไม่');
+            alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'โปรดตรวจสอบสิทธิ์'));
         }
     };
 
@@ -122,39 +123,50 @@ export default function App() {
 
 // === Components ===
 
-const LoginView = ({ onLogin, loading }) => (
-    <div className="flex h-screen bg-gray-50 items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl overflow-hidden border">
-            <div className="p-8 text-center bg-slate-800">
-                <h2 className="text-3xl font-bold tracking-tight text-white mb-2"><span className="text-blue-400">Teacher</span>DevLog</h2>
-                <p className="text-slate-300 text-sm">ระบบบันทึกและติดตามการพัฒนาตนเองของครู</p>
-            </div>
-            <div className="p-8 space-y-6">
-                <p className="text-center text-gray-600 text-sm">
-                    กรุณาเข้าสู่ระบบด้วยบัญชี Google ของสถานศึกษาเพื่อเริ่มต้นใช้งานระบบ
-                </p>
-                <button
-                    onClick={onLogin}
-                    disabled={loading}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-xl transition-colors shadow-sm flex items-center justify-center disabled:opacity-70"
-                >
-                    {loading ? (
-                        <>
-                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                            กำลังตรวจสอบ...
-                        </>
-                    ) : (
-                        "เข้าสู่ระบบด้วย Google"
-                    )}
-                </button>
-            </div>
-            <div className="bg-slate-50 p-6 border-t text-xs text-center text-gray-500 space-y-2">
-                <p className="font-medium text-gray-700">คำแนะนำสำหรับผู้ใช้งานใหม่</p>
-                <p>หากคุณพบปัญหาในการเข้าสู่ระบบ โปรดแน่ใจว่าคุณได้กดเปิดสิทธิ์การใช้งาน (Authorization) ในหน้า Web App ของ Google แล้ว</p>
+const LoginView = ({ onLogin, loading }) => {
+    const [email, setEmail] = useState('');
+
+    return (
+        <div className="flex h-screen bg-gray-50 items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-[24px] shadow-xl overflow-hidden border border-gray-100">
+                <div className="p-10 text-center bg-slate-900">
+                    <h2 className="text-3xl font-bold tracking-tight text-white mb-2 font-display"><span className="text-blue-400">Teacher</span>DevLog</h2>
+                    <p className="text-slate-300 text-sm">ระบบบันทึกการพัฒนาตนเอง</p>
+                </div>
+                <div className="p-8 space-y-6">
+                    <p className="text-center text-gray-600 text-sm mb-2">
+                        เข้าสู่ระบบเพื่อใช้งาน (ระบุอีเมล)
+                    </p>
+                    <input
+                        type="email"
+                        placeholder="your.email@school.ac.th"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none text-center"
+                    />
+                    <button
+                        onClick={() => onLogin(email)}
+                        disabled={loading || !email.includes('@')}
+                        className="w-full bg-[#007AFF] hover:bg-blue-600 text-white font-medium py-3.5 rounded-xl transition-colors apple-shadow flex items-center justify-center disabled:opacity-50"
+                    >
+                        {loading ? (
+                            <>
+                                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                กำลังตรวจสอบ...
+                            </>
+                        ) : (
+                            "เข้าสู่ระบบ"
+                        )}
+                    </button>
+                </div>
+                <div className="bg-orange-50 p-6 border-t border-orange-100 text-xs text-center text-orange-800 space-y-2">
+                    <p className="font-semibold text-sm">สำหรับนักพัฒนา (Localhost Mode)</p>
+                    <p>ระบบ Google Apps Script จะไม่สามารถดึงอีเมลอัตโนมัติได้เมื่อรันผ่าน localhost กรุณาพิมพ์อีเมลของคุณ (เช่น <b>admin@test.com</b>) แล้วกดปุ่มเพื่อใช้ทดสอบระบบครับ</p>
+                </div>
             </div>
         </div>
-    </div>
-);
+    );
+};
 
 // === Components ===
 
