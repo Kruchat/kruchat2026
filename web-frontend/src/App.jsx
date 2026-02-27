@@ -8,6 +8,7 @@ const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxhjBgP7lhCTIwIegwl
 
 export default function App() {
     const [currentUser, setCurrentUser] = useState(null);
+    const [localEmail, setLocalEmail] = useState(''); // Store manual email for local dev
     const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, records, review, users, settings
     const [loading, setLoading] = useState(false);
     const [isCheckingAutoLogin, setIsCheckingAutoLogin] = useState(true);
@@ -40,9 +41,15 @@ export default function App() {
         }
         setLoading(true);
         try {
+            const finalPayload = { action, ...payload };
+            // Append localEmail if it exists, to bypass empty Session on localhost
+            if (localEmail && !finalPayload.email) {
+                finalPayload.email = localEmail;
+            }
+
             const res = await fetch(GAS_API_URL, {
                 method: 'POST',
-                body: JSON.stringify({ action, ...payload })
+                body: JSON.stringify(finalPayload)
             });
             const json = await res.json();
             return json;
@@ -52,13 +59,14 @@ export default function App() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [localEmail]);
 
     const handleLoginClick = async (emailInput) => {
         // Send emailInput to backend if available (useful for local dev testing)
         const res = await fetchAPI('getMe', { email: emailInput });
         if (res && res.ok && res.data) {
             setCurrentUser(res.data);
+            if (emailInput) setLocalEmail(emailInput);
         } else {
             alert('ไม่สามารถเข้าสู่ระบบได้: ' + (res?.error?.message || 'โปรดตรวจสอบสิทธิ์'));
         }
@@ -66,6 +74,7 @@ export default function App() {
 
     const handleLogout = () => {
         setCurrentUser(null);
+        setLocalEmail('');
     };
 
     if (isCheckingAutoLogin) {
