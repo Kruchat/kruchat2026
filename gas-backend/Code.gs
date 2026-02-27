@@ -1,5 +1,22 @@
+function getDB() {
+  const props = PropertiesService.getScriptProperties();
+  let ssId = props.getProperty('SPREADSHEET_ID');
+  let ss = null;
+  if (ssId) {
+    try { ss = SpreadsheetApp.openById(ssId); } catch (e) {}
+  }
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) {}
+    if (!ss || ss === null) {
+      ss = SpreadsheetApp.create('Teacher Dev Log DB');
+    }
+    props.setProperty('SPREADSHEET_ID', ss.getId());
+  }
+  return ss;
+}
+
 function initSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getDB();
   const requiredSheets = {
     'Users': ['email', 'name', 'school', 'department', 'position', 'role', 'status', 'createdAt'],
     'Records': ['recordId', 'ownerEmail', 'startDate', 'endDate', 'activityType', 'title', 'organizer', 'format', 'hours', 'competencies', 'expectedGoal', 'reflection', 'implementationPlan', 'status', 'adminComment', 'createdAt', 'updatedAt'],
@@ -60,7 +77,7 @@ function handleRequest(e, method) {
     const currentUserEmail = Session.getActiveUser().getEmail();
     const currentUser = getUser(currentUserEmail);
     if(!currentUser && action !== 'getMe') {
-       const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
+       const sheet = getDB().getSheetByName('Users');
        if(sheet.getLastRow() <= 1) {
           upsertUser({ email: currentUserEmail, name: 'Admin', role: 'admin', status: 'active' });
        }
@@ -120,7 +137,7 @@ function getMeProcess() {
   const email = Session.getActiveUser().getEmail();
   let user = getUser(email);
   if(!user) {
-     const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Users');
+     const sheet = getDB().getSheetByName('Users');
      if(sheet.getLastRow() <= 1) {
         user = { email, name: email.split('@')[0], role: 'admin', status: 'active'};
         upsertUser(user);
@@ -141,13 +158,13 @@ function requireAdmin() {
 }
 
 function logAudit(email, action, details) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('AuditLog');
+  const sheet = getDB().getSheetByName('AuditLog');
   const timestamp = Utilities.formatDate(new Date(), "Asia/Bangkok", "yyyy-MM-dd HH:mm:ss");
   sheet.appendRow([timestamp, email, action, typeof details === 'object' ? JSON.stringify(details) : details]);
 }
 
 function getSheetDataAsObjects(sheetName) {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+  const sheet = getDB().getSheetByName(sheetName);
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
   const headers = data[0];
@@ -165,7 +182,7 @@ function saveObjectToSheet(sheetName, obj, keyField) {
   const lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(sheetName);
+    const sheet = getDB().getSheetByName(sheetName);
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     
@@ -279,7 +296,7 @@ function deleteRecord(recordId, email) {
   const lock = LockService.getScriptLock();
   lock.waitLock(5000);
   try {
-    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Records');
+    const sheet = getDB().getSheetByName('Records');
     const data = sheet.getDataRange().getValues();
     const headers = data[0];
     const idIndex = headers.indexOf('recordId');
