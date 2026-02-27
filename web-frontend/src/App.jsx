@@ -83,12 +83,12 @@ export default function App() {
 
     const renderContent = () => {
         switch (activeTab) {
-            case 'dashboard': return <DashboardView user={currentUser} />;
+            case 'dashboard': return <DashboardView user={currentUser} fetchAPI={fetchAPI} />;
             case 'records': return <RecordsView user={currentUser} fetchAPI={fetchAPI} />;
             case 'review': return <ReviewView user={currentUser} fetchAPI={fetchAPI} />;
             case 'users': return <UsersView user={currentUser} fetchAPI={fetchAPI} />;
-            case 'settings': return <SettingsView user={currentUser} fetchAPI={fetchAPI} />;
-            default: return <DashboardView user={currentUser} />;
+            case 'settings': return <SettingsView />;
+            default: return <DashboardView user={currentUser} fetchAPI={fetchAPI} />;
         }
     };
 
