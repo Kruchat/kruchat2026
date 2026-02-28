@@ -88,13 +88,11 @@ function handleRequest(e, method) {
       return buildResponse({ ok: true, data: responseData });
     }
     
-    // For authenticated endpoints, get user email from Session or payload
-    let currentUserEmail = Session.getActiveUser().getEmail();
-    if (!currentUserEmail && payload.email) {
-       currentUserEmail = payload.email;
-    }
+    // For authenticated endpoints, get user email from payload
+    // Note: Since webapp runs as USER_DEPLOYING, Session.getActiveUser() would return the developer's email, not the user's
+    let currentUserEmail = payload.email;
     
-    if(!currentUserEmail) throw new Error("Authentication failed: No email found");
+    if(!currentUserEmail) throw new Error("Authentication failed: No email found in payload");
 
     const currentUser = getUser(currentUserEmail);
     if(!currentUser && action !== 'getMe') {
